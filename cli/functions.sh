@@ -226,10 +226,10 @@ function deployFanout {
       echo "Unable to find suitable 'zip' or '7z' command" 1>&2
       exit -1
     else
-      7z a -r fanout.zip fanout.js node_modules lib
+      7z a -r fanout.zip fanout.js node_modules lib -xr!node_modules/mocha -xr!node_modules/aws-sdk
     fi
   else
-    zip -q -r fanout.zip fanout.js node_modules lib
+    zip -q -r fanout.zip fanout.js node_modules lib --exclude node_modules/mocha node_modules/aws-sdk node_modules/jshint
   fi
 
   if [ -z "$FUNCTION_ARN" ]; then
