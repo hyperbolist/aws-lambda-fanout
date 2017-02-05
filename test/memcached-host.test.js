@@ -22,7 +22,7 @@
 
 'use strict';
 
-const mc = require('../test-hosts/memcached.js');
+const mc = require('../test-hosts/memcached-host.js');
 const net = require('net');
 const uuid = require('uuid');
 
