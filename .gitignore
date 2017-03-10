@@ -1,3 +1,6 @@
 node_modules
 .DS_Store
 coverage
+npm-debug.log
+fanout-source.zip
+fanout-build.zip

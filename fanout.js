@@ -44,25 +44,25 @@ services.configure(config);
 // This function posts data to the specified service
 //  If the target is marked as 'collapse', records will
 //  be grouped in a single payload before being sent
-function postToService(serviceReference, target, records, stats) {
+function postToService(serviceReference, target, records) {
 	const parallelPosters = target.parallel ? config.parallelPosters : 1;
-  let   hasErrors = false;
-  const definition = serviceReference.definition;
-  const service = serviceReference.service;
-  const limits = definition.limits;
+	let   hasErrors = false;
+	const definition = serviceReference.definition;
+	const service = serviceReference.service;
+	const limits = definition.limits;
 
 	const maxRecords = limits.maxRecords;
 	const maxSize = limits.maxSize;
 	const maxUnitSize = limits.maxUnitSize;
-  const includeKey = limits.includeKey;
+	const includeKey = limits.includeKey;
 	const listOverhead = limits.listOverhead;
 	const recordOverhead = limits.recordOverhead;
 	const interRecordOverhead = limits.interRecordOverhead;
 
-  // Filter invalid records
+	// Filter invalid records
 	records = records.filter((record) => {
-    const size = record.size + (includeKey ? Buffer.byteLength(record.key) : 0);
-    const maxSizeWithOverhead = maxUnitSize - (listOverhead + recordOverhead);
+		const size = record.size + (includeKey ? Buffer.byteLength(record.key) : 0);
+		const maxSizeWithOverhead = maxUnitSize - (listOverhead + recordOverhead);
 		if(size > maxSizeWithOverhead) {
 			console.error(`Record too large to be pushed to target '${target.id}' of type '${target.type}': record of ${size} bytes, maximum of ${maxSizeWithOverhead} bytes allowed`);
 			hasErrors = true;
@@ -98,166 +98,168 @@ function postToService(serviceReference, target, records, stats) {
 	}
 
 	// Posts the blocks to the target services
-  return queue(blocks, (block) => { 
-    return definition.send(service, target, block.records).catch((err) => {
-      console.error(`An error occured while posting data to target '${target.id}' of type '${target.type}':`, err);
-      hasErrors = true;
-      return Promise.resolve(null);
-    });
-  }, parallelPosters).then(() => {
-    serviceReference.dispose();
-    if(hasErrors) {
-      return Promise.reject(Error("Some errors have occured while posting data to AWS Services"));
-    } else {
-      return Promise.resolve(null);
-    }
-  }).catch((err) => {
-    console.error(err);
-    return Promise.reject(err);
-  });
+	return queue(blocks, (block) => {
+		return definition.send(service, target, block.records).catch((err) => {
+			console.error(`An error occured while posting data to target '${target.id}' of type '${target.type}':`, err);
+			hasErrors = true;
+			return Promise.resolve(null);
+		});
+	}, parallelPosters).then(() => {
+		serviceReference.dispose();
+		if(hasErrors) {
+			return Promise.reject(Error("Some errors have occured while posting data to AWS Services"));
+		} else {
+			return Promise.resolve(null);
+		}
+	}).catch((err) => {
+		console.error(err);
+		return Promise.reject(err);
+	});
 }
 
 //********
 // This function transfers an entire event to the underlying service
-function interceptService(serviceReference, target, event, stats) {
-  return serviceReference.definition.intercept(serviceReference.service, target, event).then(() => {
-    serviceReference.dispose();
-  }).catch((err) => {
-    serviceReference.dispose();
-    return Promise.reject(err);
-  });
+function interceptService(serviceReference, target, event) {
+	return serviceReference.definition.intercept(serviceReference.service, target, event).then(() => {
+		serviceReference.dispose();
+	}).catch((err) => {
+		serviceReference.dispose();
+		return Promise.reject(err);
+	});
 }
 
 //********
 // This function manages the messages for a target
 function sendMessages(eventSourceARN, target, event, stats) {
-  if(config.debug) {
-    console.log(`Processing target '${target.id}'`);
-  }
+	if(config.debug) {
+		console.log(`Processing target '${target.id}'`);
+	}
 
-  const start = Date.now();
-  stats.addTick(`targets#${eventSourceARN}`);
-  stats.register(`records#${eventSourceARN}#${target.destination}`, 'Records', 'stats', 'Count', eventSourceARN, target.destination);
-  stats.addValue(`records#${eventSourceARN}#${target.destination}`, event.Records.length);
+	const start = Date.now();
+	stats.addTick(`targets#${eventSourceARN}`);
+	stats.register(`records#${eventSourceARN}#${target.destination}`, 'Records', 'stats', 'Count', eventSourceARN, target.destination);
+	stats.addValue(`records#${eventSourceARN}#${target.destination}`, event.Records.length);
 
-  services.get(target).then((serviceReference) => {
-    const definition = serviceReference.definition;
-    if(definition.intercept) {
-      if(target.passthrough) {
-        return transform(event.Records, target).then((transformedRecords) => {
-          transformedRecords.forEach((record) => record.data = record.data.toString('base64'));
-          return transformedRecords;
-        }).then((transformedRecords) => {
-          return interceptService(serviceReference, target, { Records: transformedRecords }, stats);
-        });
-      } else {
-        return interceptService(serviceReference, target, event, stats);
-      }
-    } else if (definition.send) {
-      return transform(event.Records, target).then((transformedRecords) => {
-        return postToService(serviceReference, target, transformedRecords, stats);
-      });
-    } else {
-      return Promise.reject(new Error(`Invalid module '${target.type}', it must export either an 'intercept' or a 'send' method`));
-    }
-  }).then(() => {
-    if(config.debug) {
-      const end = Date.now();
-      const duration = Math.floor((end - start) / 10) / 100;
-      console.log(`Target '${target.id}' for source '${eventSourceARN}' successfully processed ${event.Records.length} records in ${duration} seconds`);
-    }
-  }).catch((err) => {
-    console.error(`Error while processing target '${target.id}':`, err);
-    return Promise.reject(new Error("Error while processing target '" + target.id + "': " + err));
-  });
+	services.get(target).then((serviceReference) => {
+		const definition = serviceReference.definition;
+		if(definition.intercept) {
+			if(target.passthrough) {
+				return transform(event.Records, target).then((transformedRecords) => {
+					transformedRecords.forEach((record) => record.data = record.data.toString('base64'));
+					return transformedRecords;
+				}).then((transformedRecords) => {
+					return interceptService(serviceReference, target, { Records: transformedRecords }, stats);
+				});
+			} else {
+				return interceptService(serviceReference, target, event, stats);
+			}
+		} else if (definition.send) {
+			return transform(event.Records, target).then((transformedRecords) => {
+				return postToService(serviceReference, target, transformedRecords, stats);
+			});
+		} else {
+			return Promise.reject(new Error(`Invalid module '${target.type}', it must export either an 'intercept' or a 'send' method`));
+		}
+	}).then(() => {
+		if(config.debug) {
+			const end = Date.now();
+			const duration = Math.floor((end - start) / 10) / 100;
+			console.log(`Target '${target.id}' for source '${eventSourceARN}' successfully processed ${event.Records.length} records in ${duration} seconds`);
+		}
+	}).catch((err) => {
+		console.error(`Error while processing target '${target.id}': ${err.message}`);
+		return Promise.reject(new Error("Error while processing target '" + target.id + "': " + err));
+	});
 }
 
 //********
 // This function reads a set of records from Amazon Kinesis or Amazon DynamoDB Streams and sends it to all subscribed parties
-function fanOut(eventSourceARN, event, targets, stats, callback) {
-  if(targets.length === 0) {
-    console.log("No output subscribers found for this event");
-    return Promise.resolve(null);
-  }
+function fanOut(eventSourceARN, event, targets, stats) {
+	if(targets.length === 0) {
+		console.log("No output subscribers found for this event");
+		return Promise.resolve(null);
+	}
 
-  const start     = Date.now();
-  let   hasErrors = false;
+	const start     = Date.now();
+	let   hasErrors = false;
 
-  return queue(targets, (target) => {
-    return sendMessages(eventSourceARN, target, event, stats).catch((err) => {
-      hasErrors = true;
-      return Promise.resolve(null);
-    });
-  }, config.parallelTargets).then(() => {
-    if(hasErrors) {
-      console.error("Processing of targets for this event ended with errors,");
-      return Promise.reject(new Error("Some processing errors occured"));
-    } else {
-      const end = Date.now();
-      const duration = Math.floor((end - start) / 10) / 100;
-      console.log(`Processing succeeded, processed ${event.Records.length} records for ${targets.length} targets in ${duration} seconds`);
-      return Promise.resolve(null);
-    }
-  });
+	return queue(targets, (target) => {
+		return sendMessages(eventSourceARN, target, event, stats).catch(() => {
+			hasErrors = true;
+			return Promise.resolve(null);
+		});
+	}, config.parallelTargets).then(() => {
+		if(hasErrors) {
+			console.error("Processing of targets for this event ended with errors,");
+			return Promise.reject(new Error("Some processing errors occured"));
+		} else {
+			const end = Date.now();
+			const duration = Math.floor((end - start) / 10) / 100;
+			console.log(`Processing succeeded, processed ${event.Records.length} records for ${targets.length} targets in ${duration} seconds`);
+			return Promise.resolve(null);
+		}
+	});
 }
 
 //********
 // Lambda entry point. Loads the configuration and does the fanOut
 exports.handler = function(event, context, callback) {
-  const stats = statistics.create();
-  stats.register('sources', 'Sources', 'counter', 'Count'); // source, destination
-  stats.register('records', 'Records', 'counter', 'Count'); // source, destination
+	const stats = statistics.create();
+	stats.register('sources', 'Sources', 'counter', 'Count'); // source, destination
+	stats.register('records', 'Records', 'counter', 'Count'); // source, destination
 
-  if (config.debug) {
-    console.log(`Starting process of ${event.Records.length} events`);
-  }
+	if (config.debug) {
+		console.log(`Starting process of ${event.Records.length} events`);
+	}
 
-  // Group records per source ARN
-  const sources = {};
+	// Group records per source ARN
+	const sources = {};
 
-  // Kinesis Firehose, to be transformed at the event level
-  if((! event.hasOwnProperty("Records")) && (event.hasOwnProperty('records'))) {
-    event.Records = event.records.map((record) => {
-      return {
-        invocationId: event.invocationId,
-        awsRegion: event.region,
-        eventSource: "aws:firehose",
-        eventSourceARN: event.deliveryStreamArn,
-        firehose: record
-      };
-    });
-  }
+	// Kinesis Firehose, to be transformed at the event level
+	if((! event.hasOwnProperty("Records")) && (event.hasOwnProperty('records'))) {
+		event.Records = event.records.map((record) => {
+			return {
+				invocationId: event.invocationId,
+				awsRegion: event.region,
+				eventSource: "aws:firehose",
+				eventSourceARN: event.deliveryStreamArn,
+				firehose: record
+			};
+		});
+	}
 
-  event.Records.forEach(function(record) {
-    const eventSourceARN = record.eventSourceARN || record.TopicArn;
-    if(! sources.hasOwnProperty(eventSourceARN)) {
-      stats.addTick('sources');
-      stats.register(`records#${eventSourceARN}`, 'Records', 'counter', 'Count', eventSourceARN);
-      stats.register(`targets#${eventSourceARN}`, 'Targets', 'counter', 'Count', eventSourceARN);
-      sources[eventSourceARN] = { Records: [record] };
-    } else {
-      sources[eventSourceARN].Records.push(record);
-    }
-    stats.addTick(`records#${eventSourceARN}`);
-  });
+	event.Records.forEach(function(record) {
+		const eventSourceARN = record.eventSourceARN || record.TopicArn;
+		if(! sources.hasOwnProperty(eventSourceARN)) {
+			stats.addTick('sources');
+			stats.register(`records#${eventSourceARN}`, 'Records', 'counter', 'Count', eventSourceARN);
+			stats.register(`targets#${eventSourceARN}`, 'Targets', 'counter', 'Count', eventSourceARN);
+			sources[eventSourceARN] = { Records: [record] };
+		} else {
+			sources[eventSourceARN].Records.push(record);
+		}
+		stats.addTick(`records#${eventSourceARN}`);
+	});
 
-  const eventSourceARNs = Object.keys(sources);
+	const eventSourceARNs = Object.keys(sources);
 
-  let hasErrors = false;
+	let hasErrors = false;
 
-  queue(eventSourceARNs, (eventSourceARN) => {
-    configuration.get(eventSourceARN, services.definitions).then((targets) => {
-      return fanOut(eventSourceARN, sources[eventSourceARN], targets, stats);
-    }).catch((err) => {
-      hasErrors = true;
-    });
-  }).then(() => stats.publish()).then(() => {
-    if(hasErrors) {
-      console.log("Done processing all subscribers for this event, no errors detected");
-      callback(null);
-    } else {
-      console.error("Some processing errors occured, check logs");
-      callback(Error("Some processing errors occured, check logs"));
-    }
-  });
+	queue(eventSourceARNs, (eventSourceARN) => {
+		configuration.get(eventSourceARN, services.definitions).then((targets) => {
+			return fanOut(eventSourceARN, sources[eventSourceARN], targets, stats);
+		}).catch(() => {
+			hasErrors = true;
+		});
+	}).then(() => {
+		stats.publish();
+	}).then(() => {
+		if(hasErrors) {
+			console.log("Done processing all subscribers for this event, no errors detected");
+			callback(null);
+		} else {
+			console.error("Some processing errors occured, check logs");
+			callback(Error("Some processing errors occured, check logs"));
+		}
+	});
 };
