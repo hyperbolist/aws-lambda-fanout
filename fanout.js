@@ -143,16 +143,7 @@ function sendMessages(eventSourceARN, target, event, stats) {
 	services.get(target).then((serviceReference) => {
 		const definition = serviceReference.definition;
 		if(definition.intercept) {
-			if(target.passthrough) {
-				return transform(event.Records, target).then((transformedRecords) => {
-					transformedRecords.forEach((record) => record.data = record.data.toString('base64'));
-					return transformedRecords;
-				}).then((transformedRecords) => {
-					return interceptService(serviceReference, target, { Records: transformedRecords }, stats);
-				});
-			} else {
-				return interceptService(serviceReference, target, event, stats);
-			}
+			return interceptService(serviceReference, target, event, stats);
 		} else if (definition.send) {
 			return transform(event.Records, target).then((transformedRecords) => {
 				return postToService(serviceReference, target, transformedRecords, stats);
