@@ -31,94 +31,100 @@ const assert = require('assert');
 let config = null;
 const server = mch({ shards: 2 }).then((c) => config = c);
 
+Promise.prototype.always = function(callback) {
+	return this.then((result) => {
+		try {
+			callback();
+		} catch(e) {
+			console.error(`Unable to perform 'always' callback: ${e}`);
+		}
+		return Promise.resolve(result);
+	}).catch((err) => {
+		try {
+			callback();
+		} catch(e) {
+			console.error(`Unable to perform 'always' callback: ${e}`);
+		}
+		return Promise.reject(err);
+	});
+};
+
 describe('memcached-common', () => {
-	it('client throws on invalid response code', (done) => {
+	it('client throws on invalid response code', () => {
 		let client = null;
-		server.then(() => {
+		return server.then(() => {
 			return mc.connect('localhost', config.processPorts[0]);
 		}).then((c) => {
 			client = c;
 		}).then(() => {
 			return mc.sendRequestAndReadResponse(client, `echo 6\r\nPONG\r\n\r\n`);
 		}).then(() => {
-			client.end();
-			done(new Error("Should have raised an error"));
+			throw new Error("Should have raised an error");
 		}).catch((err) => {
-			client.end();
 			assert(err instanceof Error);
 			assert.strictEqual(err.message, "Unknown response 'PONG'");
-			done();
-		}).catch((err) => {
-			done(err);
+		}).always(() => {
+			client.end();
 		});
 	});
 
-	it('client throws on invalid response format (too short)', (done) => {
+	it('client throws on invalid response format (too short)', () => {
 		let client = null;
-		server.then(() => {
+		return server.then(() => {
 			return mc.connect('localhost', config.processPorts[0]);
 		}).then((c) => {
 			client = c;
 		}).then(() => {
 			return mc.sendRequestAndReadResponse(client, `echo 11\r\nVALUE 2 3\r\n\r\n`);
 		}).then(() => {
-			client.end();
-			done(new Error("Should have raised an error"));
+			throw new Error("Should have raised an error");
 		}).catch((err) => {
-			client.end();
 			assert(err instanceof Error);
 			assert.strictEqual(err.message, "Invalid response format received from server for code VALUE");
-			done();
-		}).catch((err) => {
-			done(err);
+		}).always(() => {
+			client.end();
 		});
 	});
 
-	it('client throws on invalid response format (too long)', (done) => {
+	it('client throws on invalid response format (too long)', () => {
 		let client = null;
-		server.then(() => {
+		return server.then(() => {
 			return mc.connect('localhost', config.processPorts[0]);
 		}).then((c) => {
 			client = c;
 		}).then(() => {
 			return mc.sendRequestAndReadResponse(client, `echo 17\r\nVALUE 2 3 4 5 6\r\n\r\n`);
 		}).then(() => {
-			client.end();
-			done(new Error("Should have raised an error"));
+			throw new Error("Should have raised an error");
 		}).catch((err) => {
-			client.end();
 			assert(err instanceof Error);
 			assert.strictEqual(err.message, "Invalid response format received from server for code VALUE");
-			done();
-		}).catch((err) => {
-			done(err);
+		}).always(() => {
+			client.end();
 		});
 	});
 
-	it('client throws on invalid response data (via ping)', (done) => {
+	it('client throws on invalid response data (via ping)', () => {
 		let client = null;
-		server.then(() => {
+		return server.then(() => {
 			return mc.connect('localhost', config.processPorts[0]);
 		}).then((c) => {
 			client = c;
 		}).then(() => {
 			return mc.sendRequestAndReadResponse(client, `echo 32\r\nVALUE abcdef 0 10\r\n0123456789A\r\n\r\n`);
 		}).then(() => {
-			client.end();
-			done(new Error("Should have raised an error"));
+			throw new Error("Should have raised an error");
 		}).catch((err) => {
-			client.end();
 			assert(err instanceof Error);
 			assert.strictEqual(err.message, "Invalid response data received from server for code VALUE");
-			done();
-		}).catch((err) => {
-			done(err);
+		}).always(() => {
+			client.end();
 		});
 	});
 
-	it('client accepts all end codes codes', (done) => {
+	it('client accepts all end codes codes', () => {
 		let client = null;
-		server.then(() => {
+		return server.then(() => {
 			return mc.connect('localhost', config.processPorts[0]);
 		}).then((c) => {
 			client = c;
@@ -127,61 +133,49 @@ describe('memcached-common', () => {
 		}).then((response) => {
 			assert.strictEqual(response.length, 1);
 			assert.strictEqual(response[0].code, "ERROR");
-			return response;
 		}).then(() => {
 			return mc.sendRequestAndReadResponse(client, `echo 8\r\nSTORED\r\n\r\n`);
 		}).then((response) => {
 			assert.strictEqual(response.length, 1);
 			assert.strictEqual(response[0].code, "STORED");
-			return response;
 		}).then(() => {
 			return mc.sendRequestAndReadResponse(client, `echo 12\r\nNOT_STORED\r\n\r\n`);
 		}).then((response) => {
 			assert.strictEqual(response.length, 1);
 			assert.strictEqual(response[0].code, "NOT_STORED");
-			return response;
 		}).then(() => {
 			return mc.sendRequestAndReadResponse(client, `echo 8\r\nEXISTS\r\n\r\n`);
 		}).then((response) => {
 			assert.strictEqual(response.length, 1);
 			assert.strictEqual(response[0].code, "EXISTS");
-			return response;
 		}).then(() => {
 			return mc.sendRequestAndReadResponse(client, `echo 11\r\nNOT_FOUND\r\n\r\n`);
 		}).then((response) => {
 			assert.strictEqual(response.length, 1);
 			assert.strictEqual(response[0].code, "NOT_FOUND");
-			return response;
 		}).then(() => {
 			return mc.sendRequestAndReadResponse(client, `echo 5\r\nEND\r\n\r\n`);
 		}).then((response) => {
 			assert.strictEqual(response.length, 1);
 			assert.strictEqual(response[0].code, "END");
-			return response;
 		}).then(() => {
 			return mc.sendRequestAndReadResponse(client, `echo 21\r\nCLIENT_ERROR abcdef\r\n\r\n`);
 		}).then((response) => {
 			assert.strictEqual(response.length, 1);
 			assert.strictEqual(response[0].code, "CLIENT_ERROR");
-			return response;
 		}).then(() => {
 			return mc.sendRequestAndReadResponse(client, `echo 21\r\nSERVER_ERROR abcdef\r\n\r\n`);
 		}).then((response) => {
 			assert.strictEqual(response.length, 1);
 			assert.strictEqual(response[0].code, "SERVER_ERROR");
-			return response;
-		}).then(() => {
+		}).always(() => {
 			client.end();
-			done();
-		}).catch((err) => {
-			client.end();
-			done(err);
 		});
 	});
 
-	it('client accepts chunked results', (done) => {
+	it('client accepts chunked results', () => {
 		let client = null;
-		server.then(() => {
+		return server.then(() => {
 			return mc.connect('localhost', config.processPorts[0]);
 		}).then((c) => {
 			client = c;
@@ -194,33 +188,25 @@ describe('memcached-common', () => {
 			assert.strictEqual(response[0].key, "abcdef");
 			assert.strictEqual(response[0].value.toString(), '0123456789');
 			assert.strictEqual(response[1].code, "END");
-			return response;
-		}).then(() => {
+		}).always(() => {
 			client.end();
-			done();
-		}).catch((err) => {
-			client.end();
-			done(err);
 		});
 	});
 
-	it('client does not accept encoding change', (done) => {
+	it('client does not accept encoding change', () => {
 		let client = null;
-		server.then(() => {
+		return server.then(() => {
 			return mc.connect('localhost', config.processPorts[0]);
 		}).then((c) => {
 			client = c;
 			client.setEncoding('utf-8');
 		}).then(() => {
-			client.end();
-			done(Error("An error should have been raised"));
+			throw new Error("An error should have been raised");
 		}).catch((err) => {
-			client.end();
 			assert(err instanceof Error);
 			assert.strictEqual(err.message, "You can not change the encoding for a memcached client");
-			done();
-		}).catch((err) => {
-			done(err);
+		}).always(() => {
+			client.end();
 		});
 	});
 });

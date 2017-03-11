@@ -25,7 +25,6 @@
 'use strict';
 
 const common = require('../lib/redis-common.js');
-
 const assert = require('assert');
 
 describe('redis-common', () => {

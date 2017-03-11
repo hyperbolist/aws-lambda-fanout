@@ -20,19 +20,35 @@
  * This Node.js script tests the features from the post-elasticache-memcached.js
  */
 
-/* global describe:false, it:false */
+/* global describe:false, it:false, before:false, after:false */
 
 'use strict';
 
-const uuid   = require('uuid');
-const assert = require('assert');
-const post   = require('../lib/post-elasticache-memcached.js');
-const mch    = require('../test-hosts/memcached-host.js');
+const uuid      = require('uuid');
+const assert    = require('assert');
+const post      = require('../lib/post-elasticache-memcached.js');
+const sinon     = require('sinon');
+const memcached = require('../lib/memcached.js');
 
-let config   = null;
-const server = mch({ shards: 2 }).then((c) => config = c);
+describe('post-memcached-redis', () => {
+	let processRequest = null;
+	before(() => {
+		sinon.stub(memcached, 'servers', () => {
+			return Promise.resolve({});
+		});
+		sinon.stub(memcached, 'set', (slots, records, options) => {
+			try {
+				return Promise.resolve(processRequest(slots, records, options));
+			} catch(e) {
+				return Promise.reject(e);
+			}
+		});
+	});
+	after(() => {
+		memcached.set.restore();
+		memcached.servers.restore();
+	});
 
-describe('post-elasticache-memcached', () => {
 	it('setAWS', (done) => {
 		post.setAWS(null);
 		done();
@@ -60,94 +76,72 @@ describe('post-elasticache-memcached', () => {
 	it('target', (done) => {
 		let target = { };
 		post.targetSettings(target);
-		assert.deepEqual(target, { });
+		assert.deepEqual(target, { collapse: "multiple" });
 		target = { collapse: "JSON" };
 		post.targetSettings(target);
 		assert.deepEqual(target, { collapse: "multiple" });
 		target = { role: "roleName" };
 		post.targetSettings(target);
-		assert.deepEqual(target, { role: null });
+		assert.deepEqual(target, { collapse: "multiple", role: null });
 		target = { region: "myRegion" };
 		post.targetSettings(target);
-		assert.deepEqual(target, { region: null });
+		assert.deepEqual(target, { collapse: "multiple", region: null });
 		done();
 	});
 
-	it('store item', (done) => {
+	it('store item', () => {
 		const key     = uuid();
-		let   service = null;
-		const target  = { destination: `localhost:${config.configPort}` };
+		const target  = { destination: `localhost:11211` };
+		const service = post.create(target);
 
-		server.then(() => {
-			return post.create(target);
-		}).then((s) => {
-			service = s;
-		}).then(() => {
-			return post.send(service, target, [ { key: key, data: `AZERTY${key}` } ]);
-		}).then(() => {
-			done();
-		}).catch((err) => {
-			done(err);
-		});
+		processRequest = (slots, records) => {
+			assert.deepEqual(records, [ { key: key, data: new Buffer(`AZERTY${key}`, `utf-8`) } ]);
+		};
+
+		return post.send(service, target, [ { key: key, data: new Buffer(`AZERTY${key}`, `utf-8`) } ]);
 	});
 
-	it('store invalid item', (done) => {
+	it('store 2 items in 2 calls', () => {
 		const key     = uuid();
-		let   service = null;
-		const target  = { destination: `localhost:${config.configPort}` };
+		const target  = { destination: `localhost:11211` };
+		const service = post.create(target);
 
-		server.then(() => {
-			return post.create(target);
-		}).then((s) => {
-			service = s;
-		}).then(() => {
-			return post.send(service, target, [ { key: `invalid ${key}`, data: `AZERTY${key}` } ]);
-		}).then(() => {
-			done(new Error("An error should have been raised"));
-		}).catch((err) => {
-			assert(err instanceof Error);
-			assert.strictEqual(err.message, "Errors occured when processing elements");
-			done();
-		}).catch((err) => {
-			done(err);
-		});
+		processRequest = (slots, records) => {
+			assert.deepEqual(records, [ { key: `${key}-1`, data: new Buffer(`AZERTY${key}`, `utf-8`) } ]);
+		};
+
+		return post.send(service, target, [ { key: `${key}-1`, data: new Buffer(`AZERTY${key}`, `utf-8`) } ])
+			.then(() => {
+				processRequest = (slots, records) => {
+					assert.deepEqual(records, [ { key: `${key}-2`, data: new Buffer(`QWERTY${key}`, `utf-8`) } ]);
+				};
+
+				return post.send(service, target, [ { key: `${key}-2`, data: new Buffer(`QWERTY${key}`, `utf-8`) } ]);
+			});
 	});
 
-	it('store items', (done) => {
+	it('store 2 items in 1 call', () => {
 		const key     = uuid();
-		let   service = null;
-		const target  = { destination: `localhost:${config.configPort}` };
+		const target  = { destination: `localhost:11211` };
+		const service = post.create(target);
 
-		server.then(() => {
-			return post.create(target);
-		}).then((s) => {
-			service = s;
-		}).then(() => {
-			return post.send(service, target, [ { key: `${key}-1`, data: `AZERTY${key}` } ]);
-		}).then(() => {
-			return post.send(service, target, [ { key: `${key}-2`, data: `QWERTY${key}` } ]);
-		}).then(() => {
-			done();
-		}).catch((err) => {
-			done(err);
-		});
+		processRequest = (slots, records) => {
+			assert.deepEqual(records, [ { key: `${key}-1`, data: new Buffer(`AZERTY${key}`, `utf-8`) }, { key: `${key}-2`, data: new Buffer(`QWERTY${key}`, `utf-8`) } ]);
+		};
+
+		return post.send(service, target, [ { key: `${key}-1`, data: new Buffer(`AZERTY${key}`, `utf-8`) }, { key: `${key}-2`, data: new Buffer(`QWERTY${key}`, `utf-8`) } ]);
 	});
 
-	it('store item with options', (done) => {
+	it('store item with options', () => {
 		const key     = uuid();
-		let   service = null;
-		const target  = { destination: `localhost:${config.configPort}` };
+		const target  = { destination: `localhost:11211` };
+		const service = post.create(target, { test: true });
 
-		server.then(() => {
-			return post.create(target, { test: true });
-		}).then((s) => {
-			service = s;
-		}).then(() => {
-			return post.send(service, target, [ { key: key, data: `AZERTY${key}` } ]);
-		}).then(() => {
-			done();
-		}).catch((err) => {
-			done(err);
-		});
+		processRequest = (slots, records, options) => {
+			assert.strictEqual(options.test, true);
+			assert.deepEqual(records, [ { key: key, data: new Buffer(`AZERTY${key}`, `utf-8`) } ]);
+		};
+
+		return post.send(service, target, [ { key: key, data: new Buffer(`AZERTY${key}`, `utf-8`) } ]);
 	});
 });

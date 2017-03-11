@@ -24,12 +24,12 @@
 
 'use strict';
 
-const rc = require('../lib/redis-common.js');
-const rh = require('../test-hosts/redis-host.js');
-const crc16 = require('../lib/crc16.js');
-const uuid = require('uuid');
+const rc     = require('../lib/redis-common.js');
+const rh     = require('../test-hosts/redis-host.js');
+const crc16  = require('../lib/crc16.js');
+const uuid   = require('uuid');
 const assert = require('assert');
-const sinon = require('sinon');
+const sinon  = require('sinon');
 
 let config = null;
 let discoverClient = null;

@@ -34,10 +34,10 @@
 
 'use strict';
 
-const rc = require('../lib/redis-common.js');
-const rh = require('../test-hosts/redis-host.js');
-const r = require('../lib/redis.js');
-const uuid = require('uuid');
+const rc     = require('../lib/redis-common.js');
+const rh     = require('../test-hosts/redis-host.js');
+const r      = require('../lib/redis.js');
+const uuid   = require('uuid');
 const assert = require('assert');
 
 let config = null;

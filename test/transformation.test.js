@@ -25,8 +25,7 @@
 'use strict';
 
 var transform = require('../lib/transformation.js');
-
-var assert = require('assert');
+var assert    = require('assert');
 
 describe('transformation', () => {
 	describe('#DynamoDB.convert()', () => {

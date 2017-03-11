@@ -24,9 +24,8 @@
 
 'use strict';
 
-var queue = require('../lib/queue.js');
-
-var assert = require('assert');
+const queue  = require('../lib/queue.js');
+const assert = require('assert');
 
 describe('queue', () => {
 	it('should support empty queue', (done) => {
