@@ -136,9 +136,9 @@ function sendMessages(eventSourceARN, target, event, stats) {
 	}
 
 	const start = Date.now();
-	stats.addTick(`targets#${eventSourceARN}`);
-	stats.register(`records#${eventSourceARN}#${target.destination}`, 'Records', 'stats', 'Count', eventSourceARN, target.destination);
-	stats.addValue(`records#${eventSourceARN}#${target.destination}`, event.Records.length);
+	stats.addTick('Targets', eventSourceARN);
+	stats.register('Records', 'stats', 'Count', eventSourceARN, target.destination);
+	stats.addValue('Records', event.Records.length, eventSourceARN, target.destination);
 
 	services.get(target).then((serviceReference) => {
 		const definition = serviceReference.definition;
@@ -196,8 +196,8 @@ function fanOut(eventSourceARN, event, targets, stats) {
 // Lambda entry point. Loads the configuration and does the fanOut
 exports.handler = function(event, context, callback) {
 	const stats = statistics.create();
-	stats.register('sources', 'Sources', 'counter', 'Count'); // source, destination
-	stats.register('records', 'Records', 'counter', 'Count'); // source, destination
+	stats.register('Sources', 'counter', 'Count');
+	stats.register('Records', 'counter', 'Count');
 
 	if (config.debug) {
 		console.log(`Starting process of ${event.Records.length} events`);
@@ -222,14 +222,14 @@ exports.handler = function(event, context, callback) {
 	event.Records.forEach(function(record) {
 		const eventSourceARN = record.eventSourceARN || record.TopicArn;
 		if(! sources.hasOwnProperty(eventSourceARN)) {
-			stats.addTick('sources');
-			stats.register(`records#${eventSourceARN}`, 'Records', 'counter', 'Count', eventSourceARN);
-			stats.register(`targets#${eventSourceARN}`, 'Targets', 'counter', 'Count', eventSourceARN);
+			stats.addTick('Sources');
+			stats.register('Records', 'counter', 'Count', eventSourceARN);
+			stats.register('Targets', 'counter', 'Count', eventSourceARN);
 			sources[eventSourceARN] = { Records: [record] };
 		} else {
 			sources[eventSourceARN].Records.push(record);
 		}
-		stats.addTick(`records#${eventSourceARN}`);
+		stats.addTick('Records', eventSourceARN);
 	});
 
 	const eventSourceARNs = Object.keys(sources);
