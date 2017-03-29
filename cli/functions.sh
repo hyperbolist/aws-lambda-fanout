@@ -215,22 +215,9 @@ function readFunctionConfigParams {
 function deployFanout {
   OLD=$PWD
   cd "$DIR"
-  if [ -f "fanout.zip" ]; then
-    rm fanout.zip
-  fi
   npm install
-  ZIP_EXE=$(which zip 2> /dev/null)
-  if [ -z "$ZIP_EXE" ]; then
-    WIN_7Z_EXE=$(which 7z 2> /dev/null)
-    if [ -z "$WIN_7Z_EXE" ]; then
-      echo "Unable to find suitable 'zip' or '7z' command" 1>&2
-      exit -1
-    else
-      7z a -r fanout.zip fanout.js node_modules lib -xr!node_modules/mocha -xr!node_modules/aws-sdk
-    fi
-  else
-    zip -q -r fanout.zip fanout.js node_modules lib --exclude node_modules/mocha node_modules/aws-sdk node_modules/jshint
-  fi
+  npm prune --production
+  npm run package-build
 
   if [ -z "$FUNCTION_ARN" ]; then
     # Will be empty if we need to create the function
@@ -284,7 +271,7 @@ function deployFanout {
       fi
     fi
 
-    FUNCTION_ARN=$(aws lambda "create-function" --function-name $FUNCTION_NAME --runtime nodejs4.3 --description "This is an Amazon Kinesis and Amazon DynamoDB Streams fanout function, look at $TABLE_NAME DynamoDB table for configuration" --handler fanout.handler --role $EXEC_ROLE_ARN --memory-size $MEMORY_SIZE --timeout $TIMEOUT --zip-file fileb://fanout.zip ${VPC_PARAMS[@]} --query 'FunctionArn' --output text ${CLI_PARAMS[@]})
+    FUNCTION_ARN=$(aws lambda "create-function" --function-name $FUNCTION_NAME --runtime nodejs4.3 --description "This is an Amazon Kinesis and Amazon DynamoDB Streams fanout function, look at $TABLE_NAME DynamoDB table for configuration" --handler fanout.handler --role $EXEC_ROLE_ARN --memory-size $MEMORY_SIZE --timeout $TIMEOUT --zip-file fileb://fanout-build.zip ${VPC_PARAMS[@]} --query 'FunctionArn' --output text ${CLI_PARAMS[@]})
     if [ -z "${FUNCTION_ARN}" ]; then
       echo "Unable to create specified AWS Lambda Function '${FUNCTION_NAME}'" 1>&2
       cd "$OLD"
@@ -292,7 +279,7 @@ function deployFanout {
     fi
     echo "Created AWS Lambda Function $FUNCTION_NAME with ARN: $FUNCTION_ARN"
   else
-    FUNCTION_ARN=$(aws lambda update-function-code --function-name ${FUNCTION_NAME} --zip-file fileb://fanout.zip --query 'FunctionArn' --output text ${CLI_PARAMS[@]})
+    FUNCTION_ARN=$(aws lambda update-function-code --function-name ${FUNCTION_NAME} --zip-file fileb://fanout-build.zip --query 'FunctionArn' --output text ${CLI_PARAMS[@]})
     if [ -z "${FUNCTION_ARN}" ]; then
       echo "Unable to update specified AWS Lambda Function '${FUNCTION_NAME}'" 1>&2
       cd "$OLD"
@@ -300,8 +287,6 @@ function deployFanout {
     fi
     echo "Updated AWS Lambda Function $FUNCTION_NAME with ARN: $FUNCTION_ARN"
   fi 
-
-  rm fanout.zip
   cd "$OLD"
 }
 
