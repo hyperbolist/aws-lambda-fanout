@@ -28,6 +28,8 @@ const util   = require('../lib/util.js');
 const assert = require('assert');
 const uuid   = require('uuid');
 
+util.ensureAlways(Promise.prototype);
+
 describe('util', () => {
 	describe('#environment', () => {
 		it('getEnvString', (done) => {
@@ -247,6 +249,97 @@ describe('util', () => {
 			assert.deepEqual(destination, { immutable: 10, object: obj });
 			assert.strictEqual(destination.object, obj);
 			done();
+		});
+	});
+
+
+	describe('#ensureAlways()', () => {
+		it('add when no always property', () => {
+			const obj = {};
+			util.ensureAlways(obj);
+			assert.strictEqual(typeof(obj.always), "function");
+		});
+
+		it('override when always property not a function', () => {
+			const obj = { always: true };
+			util.ensureAlways(obj);
+			assert.strictEqual(typeof(obj.always), "function");
+		});
+
+		it('leave when always property a different function', () => {
+			const obj = { always: () => 10 };
+			util.ensureAlways(obj);
+			assert.strictEqual(typeof(obj.always), "function");
+			assert.strictEqual(obj.always(), 10);
+		});
+
+		it('add when no always function in prototype', () => {
+			function MyPromise() {}
+			util.ensureAlways(MyPromise.prototype);
+			const obj = new MyPromise();
+			assert.strictEqual(typeof(obj.always), "function");
+		});
+
+		it('override when always property in prototype not a function', () => {
+			function MyPromise() {}
+			MyPromise.prototype.always = true;
+			util.ensureAlways(MyPromise.prototype);
+			const obj = new MyPromise();
+			assert.strictEqual(typeof(obj.always), "function");
+		});
+
+		it('leave when always property in prototype a different function', () => {
+			function MyPromise() {}
+			MyPromise.prototype.always = function() { return 10; };
+			util.ensureAlways(MyPromise.prototype);
+			const obj = new MyPromise();
+			assert.strictEqual(typeof(obj.always), "function");
+			assert.strictEqual(obj.always(), 10);
+		});
+
+		it('manages resolved promises', () => {
+			let executed = false;
+			return Promise.resolve(10).always(() => {
+				executed = true;
+			}).then((result) => {
+				assert.strictEqual(result, 10);
+				assert.strictEqual(executed, true);
+			});
+		});
+
+		it('manages rejected promises', () => {
+			let executed = false;
+			return Promise.reject(new Error("Just because")).always(() => {
+				executed = true;
+			}).then(() => {
+				throw new Error("An error should have been raised");
+			}).catch((err) => {
+				assert(err instanceof Error);
+				assert.strictEqual(err.message, "Just because");
+				assert.strictEqual(executed, true);
+			});
+		});
+
+		it('can fail on resolved promises', () => {
+			return Promise.resolve(10).always(() => {
+				throw new Error("Always error");
+			}).then(() => {
+				throw new Error("An error should have been raised");
+			}).catch((err) => {
+				assert(err instanceof Error);
+				assert.strictEqual(err.message, "Always error");
+			});
+		});
+
+		it('can fail on rejected promises', () => {
+			return Promise.reject(new Error("Just because")).always(() => {
+				throw new Error("Always error");
+			}).then(() => {
+				throw new Error("An error should have been raised");
+			}).catch((err) => {
+				assert(err instanceof Error);
+				assert.strictEqual(err.message, "Always error");
+			});
 		});
 	});
 });

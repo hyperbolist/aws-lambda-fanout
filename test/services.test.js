@@ -34,6 +34,7 @@ const AWS      = require('./mock-aws.js');
 const services = require('../lib/services.js');
 const uuid     = require('uuid');
 const assert   = require('assert');
+const sinon    = require('sinon');
 
 describe('services', () => {
 	let processRequest = null;
@@ -202,7 +203,7 @@ describe('services', () => {
 		});
 	});
 
-	it('get from pool', () => {
+	it('get from empty pool', () => {
 		const key = uuid();
 		services.definitions[key] = {
 			customId: key,
@@ -224,6 +225,91 @@ describe('services', () => {
 			assert.strictEqual(serviceReference.service, `${key}#2`);
 			serviceReference.dispose();
 			ref1.dispose();
+		});
+	});
+
+	it('get after expiration', () => {
+		let sessionDuration = 900;
+		let clock = sinon.useFakeTimers();
+		const key = uuid();
+		services.definitions[key] = {
+			customId: key,
+			create: (target, options) => {
+				return createService(target, options);
+			}
+		};
+
+		processRequest = (params) => {
+			assert.strictEqual(params.RoleArn, `${key}#role`);
+			assert.strictEqual(params.RoleSessionName, 'Lambda');
+			assert.strictEqual(params.DurationSeconds, 900);
+			sessionDuration = params.DurationSeconds;
+			return Promise.resolve({});
+		};
+		createService = (target) => {
+			return target.id;
+		};
+		return services.get({ id: `${key}#1`, type: key, role: `${key}#role` }).then((serviceReference) => {
+			serviceReference.dispose();
+		}).then(() => {
+			clock.tick(sessionDuration*1000);
+			return services.get({ id: `${key}#2`, type: key, role: `${key}#role` });
+		}).then((serviceReference) => {
+			assert.strictEqual(serviceReference.definition.customId, key);
+			assert.strictEqual(serviceReference.service, `${key}#2`);
+			serviceReference.dispose();
+		}).then((result) => {
+			clock.restore();
+			return Promise.resolve(result);
+		}).catch((err) => {
+			clock.restore();
+			return Promise.reject(err);
+		});
+	});
+
+	it('get from pool after expiration', () => {
+		let sessionDuration = 900;
+		let clock = sinon.useFakeTimers();
+		const key = uuid();
+		services.definitions[key] = {
+			customId: key,
+			create: (target, options) => {
+				return createService(target, options);
+			}
+		};
+
+		processRequest = (params) => {
+			assert.strictEqual(params.RoleArn, `${key}#role`);
+			assert.strictEqual(params.RoleSessionName, 'Lambda');
+			assert.strictEqual(params.DurationSeconds, 900);
+			sessionDuration = params.DurationSeconds;
+			return Promise.resolve({});
+		};
+		createService = (target) => {
+			return target.id;
+		};
+		let ref1 = null;
+		let ref2 = null;
+		return services.get({ id: `${key}#1`, type: key, role: `${key}#role` }).then((serviceReference) => {
+			ref1 = serviceReference;
+		}).then(() => {
+			clock.tick(sessionDuration*1000);
+			return services.get({ id: `${key}#2`, type: key, role: `${key}#role` });
+		}).then((serviceReference) => {
+			ref2 = serviceReference;
+			ref1.dispose();
+			return services.get({ id: `${key}#3`, type: key, role: `${key}#role` });
+		}).then((serviceReference) => {
+			assert.strictEqual(serviceReference.definition.customId, key);
+			assert.strictEqual(serviceReference.service, `${key}#3`);
+			serviceReference.dispose();
+			ref2.dispose();
+		}).then((result) => {
+			clock.restore();
+			return Promise.resolve(result);
+		}).catch((err) => {
+			clock.restore();
+			return Promise.reject(err);
 		});
 	});
 

@@ -285,7 +285,7 @@ describe('configuration', () => {
 			throw new Error("An error should have been raised");
 		}).catch((err) => {
 			assert(err instanceof Error);
-			assert.strictEqual(err.message, `Errors occured while loading configuration data from Amazon DynamoDB table 'fanoutTargets':Error: Generated error for request ${requestKey}`);
+			assert.strictEqual(err.message, `An error occured while loading configuration data from Amazon DynamoDB table 'fanoutTargets': Error: Generated error for request ${requestKey}`);
 		});
 	});
 });

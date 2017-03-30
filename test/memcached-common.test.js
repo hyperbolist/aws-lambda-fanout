@@ -24,30 +24,15 @@
 
 'use strict';
 
-const mch = require('../test-hosts/memcached-host.js');
-const mc = require('../lib/memcached-common.js');
+const mch  = require('../test-hosts/memcached-host.js');
+const mc   = require('../lib/memcached-common.js');
+const util = require('../lib/util.js');
+
+util.ensureAlways(Promise.prototype);
 
 const assert = require('assert');
 let config = null;
 const server = mch({ shards: 2 }).then((c) => config = c);
-
-Promise.prototype.always = function(callback) {
-	return this.then((result) => {
-		try {
-			callback();
-		} catch(e) {
-			console.error(`Unable to perform 'always' callback: ${e}`);
-		}
-		return Promise.resolve(result);
-	}).catch((err) => {
-		try {
-			callback();
-		} catch(e) {
-			console.error(`Unable to perform 'always' callback: ${e}`);
-		}
-		return Promise.reject(err);
-	});
-};
 
 describe('memcached-common', () => {
 	it('client throws on invalid response code', () => {
