@@ -119,7 +119,7 @@ function postToService(eventSourceARN, serviceReference, target, records, stats)
 	return queue(blocks, (block) => {
 		stats.addTick('Calls', eventSourceARN, target.destination);
 
-		return definition.send(service, target, block.records).then(() => {
+		return definition.send(service, target, block).then(() => {
 			stats.addTick('Success', eventSourceARN, target.destination);
 		}).catch((err) => {
 			stats.addTick('Error', eventSourceARN, target.destination);
@@ -171,22 +171,32 @@ function sendMessages(eventSourceARN, target, event, records, stats) {
 	}
 
 	const start = Date.now();
-	stats.addTick('Targets', eventSourceARN);
 
 	stats.register('Records', 'stats'  , 'Count', eventSourceARN, target.destination);
 	stats.register('Calls'  , 'counter', 'Count', eventSourceARN, target.destination);
 	stats.register('Success', 'counter', 'Count', eventSourceARN, target.destination);
 	stats.register('Error'  , 'counter', 'Count', eventSourceARN, target.destination);
 
+	stats.addTick('Targets', eventSourceARN);
 	stats.addValue('Records', records.length, eventSourceARN, target.destination);
 
-	services.get(target).then((serviceReference) => {
+	return services.get(target).then((serviceReference) => {
 		const definition = serviceReference.definition;
 		if(definition.intercept) {
 			return interceptService(eventSourceARN, serviceReference, target, event, stats);
 		} else if (definition.send) {
 			return transform.records(records, target).then((transformedRecords) => {
-				return postToService(eventSourceARN, serviceReference, target, transformedRecords, stats);
+				if(transformedRecords.errors.length > 0) {
+					for (let i = 0; i < transformedRecords.errors.length; ++i) {
+						const e = transformedRecords.errors[i];
+						console.error(`Error: ${e.message} for record with key '${e.record.key}': ${e.error}`);
+					}
+					return postToService(eventSourceARN, serviceReference, target, transformedRecords.success, stats).then(() => {
+						throw new Error("Some events were not transformed, check log");
+					});
+				} else {
+					return postToService(eventSourceARN, serviceReference, target, transformedRecords.success, stats);
+				}
 			});
 		} else {
 			throw new Error(`Invalid module '${target.type}', it must export either an 'intercept' or a 'send' method`);
@@ -210,10 +220,12 @@ exports.handler = function(event, context, callback) {
 		const stats   = statistics.create();
 		const records = transform.extractRecords(event);
 
-		stats.register('Invocations', 'counter', 'Count');
-		stats.addTick('Invocations');
-
+		stats.register('Calls'       , 'counter', 'Count');
+		stats.register('Success'     , 'counter', 'Count');
+		stats.register('Error'       , 'counter', 'Count');
 		stats.register('InputRecords', 'stats', 'Count');
+
+		stats.addTick('Calls');
 		stats.addValue('InputRecords', records.length);
 
 		if(records.length === 0) {
@@ -229,24 +241,41 @@ exports.handler = function(event, context, callback) {
 		}
 
 		let eventSourceARN = records[0].eventSourceARN;
+		stats.register('Calls'       , 'counter', 'Count', eventSourceARN);
+		stats.register('Success'     , 'counter', 'Count', eventSourceARN);
+		stats.register('Error'       , 'counter', 'Count', eventSourceARN);
+		stats.register('InputRecords', 'stats'  , 'Count', eventSourceARN);
+		stats.register('Records'     , 'stats'  , 'Count', eventSourceARN);
+		stats.register('Targets'     , 'counter', 'Count', eventSourceARN);
 
-		stats.register('Invocations', 'counter', 'Count', eventSourceARN);
-		stats.register('InputRecords', 'stats', 'Count', eventSourceARN);
-		stats.register('Records', 'counter', 'Count', eventSourceARN);
-		stats.register('Targets', 'counter', 'Count', eventSourceARN);
-
-		stats.addTick('Invocations', eventSourceARN);
+		stats.addTick('Calls', eventSourceARN);
 		stats.addValue('InputRecords', records.length, eventSourceARN);
 
 		let hasErrors = false;
 		configuration.get(eventSourceARN, services.definitions).then((targets) => {
+			if(targets.length > 0) {
+				stats.addValue('Records', records.length, eventSourceARN);
+			}
 			return queue(targets, (target) => {
 				return sendMessages(eventSourceARN, target, event, records, stats).catch((err) => {
-					console.error(`Error while processing target '${target.id}': ${err.message}`);
+					console.error(`Error while processing target '${target.id}': ${err.stack}`);
 					hasErrors = true;
 					return null;
 				});
 			}, config.parallelTargets);
+		}).then((targets) => {
+			if(hasErrors) {
+				stats.addTick('Success');
+				stats.addTick('Success', eventSourceARN);
+			} else {
+				stats.addTick('Error');
+				stats.addTick('Error', eventSourceARN);
+			}
+			return targets;
+		}).catch((err) => {
+			stats.addTick('Error');
+			stats.addTick('Error', eventSourceARN);
+			return Promise.reject(err);
 		}).always(() => {
 			stats.publish();
 		}).then((targets) => {

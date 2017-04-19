@@ -77,6 +77,9 @@ describe('post-firehose', () => {
 		target = { collapse: "JSON" };
 		post.targetSettings(target);
 		assert.deepEqual(target, { collapse: "API" });
+		target = { collapse: "none" };
+		post.targetSettings(target);
+		assert.deepEqual(target, { collapse: "API" });
 		target = { role: "roleName" };
 		post.targetSettings(target);
 		assert.deepEqual(target, { collapse: "API", role: "roleName" });

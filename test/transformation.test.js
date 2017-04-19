@@ -42,6 +42,7 @@ describe('transformation', () => {
 				done(err);
 			});
 		});
+
 		it('should ignore on invalid object DynamoDB Key', (done) => {
 			var source = [ { "awsRegion": "r1", "dynamodb": { "Keys": { "hash": { "Z": "myhash" } }, "NewImage": { "hash": { "S": "myhash" } }, "SequenceNumber": "1" }, "eventID": "1", "eventName": "INSERT", "eventSource": "aws:dynamodb", "eventSourceARN": "arn:aws:dynamodb:us-east-1:0123456789ab:table/test/stream/2016-01-16T16:10:56.235", "eventVersion": "1.0" } ];
 			var target = { convertDDB: true };
@@ -53,6 +54,7 @@ describe('transformation', () => {
 				done(err);
 			});
 		});
+
 		it('should ignore on invalid object DynamoDB Objects', (done) => {
 			var source = [ { "awsRegion": "r1", "dynamodb": { "Keys": { "hash": { "S": "myhash" } }, "NewImage": { "hash": { "Z": "myhash" } }, "SequenceNumber": "1" }, "eventID": "1", "eventName": "INSERT", "eventSource": "aws:dynamodb", "eventSourceARN": "arn:aws:dynamodb:us-east-1:0123456789ab:table/test/stream/2016-01-16T16:10:56.235", "eventVersion": "1.0" } ];
 			var target = { convertDDB: true };
@@ -64,6 +66,7 @@ describe('transformation', () => {
 				done(err);
 			});
 		});
+
 		it('should support DynamoDB Objects with Composite Keys', (done) => {
 			var source = [ { "awsRegion": "r1", "dynamodb": { "Keys": { "hash": { "S": "myhash" }, "id": { N: 10 } }, "NewImage": { "hash": { "S": "myhash" }, "id": { N: 10 } }, "SequenceNumber": "1" }, "eventID": "1", "eventName": "INSERT", "eventSource": "aws:dynamodb", "eventSourceARN": "arn:aws:dynamodb:us-east-1:0123456789ab:table/test/stream/2016-01-16T16:10:56.235", "eventVersion": "1.0" } ];
 			var target = { convertDDB: true };
@@ -77,6 +80,7 @@ describe('transformation', () => {
 				done(err);
 			});
 		});
+
 		it('should support DynamoDB Objects with Composite Keys containing a buffer', (done) => {
 			var source = [ { "awsRegion": "r1", "dynamodb": { "Keys": { "hash": { "S": "myhash" }, "id": { B: "YjY0VmFs" } }, "NewImage": { "hash": { "S": "myhash" }, "id": { B: "YjY0VmFs" } }, "SequenceNumber": "1" }, "eventID": "1", "eventName": "INSERT", "eventSource": "aws:dynamodb", "eventSourceARN": "arn:aws:dynamodb:us-east-1:0123456789ab:table/test/stream/2016-01-16T16:10:56.235", "eventVersion": "1.0" } ];
 			var target = { convertDDB: true };
@@ -90,6 +94,7 @@ describe('transformation', () => {
 				done(err);
 			});
 		});
+
 		it('should support DynamoDB Objects without images', (done) => {
 			var source = [ { "awsRegion": "r1", "dynamodb": { "Keys": { "hash": { "S": "myhash" } }, "SequenceNumber": "1" }, "eventID": "1", "eventName": "INSERT", "eventSource": "aws:dynamodb", "eventSourceARN": "arn:aws:dynamodb:us-east-1:0123456789ab:table/test/stream/2016-01-16T16:10:56.235", "eventVersion": "1.0" } ];
 			var target = { convertDDB: true };
@@ -103,6 +108,7 @@ describe('transformation', () => {
 				done(err);
 			});
 		});
+
 		it('should support multiple DynamoDB Objects', (done) => {
 			var source = [
 				{ "awsRegion": "r1", "dynamodb": { "Keys": { "hash": { "S": "hash1" } }, "NewImage": { "hash": { "S": "hash1" } }, "SequenceNumber": "1" }, "eventID": "1", "eventName": "INSERT", "eventSource": "aws:dynamodb", "eventSourceARN": "arn:aws:dynamodb:us-east-1:0123456789ab:table/test/stream/2016-01-16T16:10:56.235", "eventVersion": "1.0" },
@@ -121,7 +127,32 @@ describe('transformation', () => {
 				done(err);
 			});
 		});
+
+		it('should ignore invalid DynamoDB Objects', () => {
+			var source = [
+				{ "awsRegion": "r1", "eventID": "1", "eventName": "INSERT", "eventSource": "aws:dynamodb", "eventSourceARN": "arn:aws:dynamodb:us-east-1:0123456789ab:table/test/stream/2016-01-16T16:10:56.235", "eventVersion": "1.0" },
+			];
+			var target = { convertDDB: true };
+			return transform.records(source, target).then((result) => {
+				assert.strictEqual(result.success.length, 0);
+				assert.strictEqual(result.errors.length, 1);
+			});
+		});
+
+		it('should ignore invalid DynamoDB Objects (throws error)', () => {
+			const entry = { "Keys": { "hash": { "S": "hash1" } }, "SequenceNumber": "1" };
+			var source = [
+				{ "awsRegion": "r1", "dynamodb": entry, "eventID": "1", "eventName": "INSERT", "eventSource": "aws:dynamodb", "eventSourceARN": "arn:aws:dynamodb:us-east-1:0123456789ab:table/test/stream/2016-01-16T16:10:56.235", "eventVersion": "1.0" },
+			];
+			Object.defineProperty(entry, "NewImage", { configurable: true, enumerable: true, get: function() { throw new Error("Impossible to get"); }, set: function() {} });
+			var target = { convertDDB: true };
+			return transform.records(source, target).then((result) => {
+				assert.strictEqual(result.success.length, 0);
+				assert.strictEqual(result.errors.length, 1);
+			});
+		});
 	});
+
 	describe('#DynamoDB.no-convert()', () => {
 		it('should support DynamoDB Objects', (done) => {
 			var source = [ { "awsRegion": "r1", "dynamodb": { "Keys": { "hash": { "S": "myhash" } }, "NewImage": { "hash": { "S": "myhash" } }, "SequenceNumber": "1" }, "eventID": "1", "eventName": "INSERT", "eventSource": "aws:dynamodb", "eventSourceARN": "arn:aws:dynamodb:us-east-1:0123456789ab:table/test/stream/2016-01-16T16:10:56.235", "eventVersion": "1.0" } ];
@@ -136,6 +167,7 @@ describe('transformation', () => {
 				done(err);
 			});
 		});
+
 		it('should support DynamoDB Objects with Composite Keys', (done) => {
 			var source = [ { "awsRegion": "r1", "dynamodb": { "Keys": { "hash": { "S": "myhash" }, "id": { N: 10 } }, "NewImage": { "hash": { "S": "myhash" }, "id": { N: 10 } }, "SequenceNumber": "1" }, "eventID": "1", "eventName": "INSERT", "eventSource": "aws:dynamodb", "eventSourceARN": "arn:aws:dynamodb:us-east-1:0123456789ab:table/test/stream/2016-01-16T16:10:56.235", "eventVersion": "1.0" } ];
 			var target = { convertDDB: false };
@@ -149,6 +181,7 @@ describe('transformation', () => {
 				done(err);
 			});
 		});
+
 		it('should support multiple DynamoDB Objects', (done) => {
 			var source = [
 				{ "awsRegion": "r1", "dynamodb": { "Keys": { "hash": { "S": "hash1" } }, "NewImage": { "hash": { "S": "hash1" } }, "SequenceNumber": "1" }, "eventID": "1", "eventName": "INSERT", "eventSource": "aws:dynamodb", "eventSourceARN": "arn:aws:dynamodb:us-east-1:0123456789ab:table/test/stream/2016-01-16T16:10:56.235", "eventVersion": "1.0" },
@@ -167,7 +200,32 @@ describe('transformation', () => {
 				done(err);
 			});
 		});
+
+		it('should ignore invalid DynamoDB Objects', () => {
+			var source = [
+				{ "awsRegion": "r1", "eventID": "1", "eventName": "INSERT", "eventSource": "aws:dynamodb", "eventSourceARN": "arn:aws:dynamodb:us-east-1:0123456789ab:table/test/stream/2016-01-16T16:10:56.235", "eventVersion": "1.0" },
+			];
+			var target = { convertDDB: false };
+			return transform.records(source, target).then((result) => {
+				assert.strictEqual(result.success.length, 0);
+				assert.strictEqual(result.errors.length, 1);
+			});
+		});
+
+		it('should ignore invalid DynamoDB Objects (throws error)', () => {
+			const entry = { "Keys": { "hash": { "S": "hash1" } }, "SequenceNumber": "1" };
+			var source = [
+				{ "awsRegion": "r1", "dynamodb": entry, "eventID": "1", "eventName": "INSERT", "eventSource": "aws:dynamodb", "eventSourceARN": "arn:aws:dynamodb:us-east-1:0123456789ab:table/test/stream/2016-01-16T16:10:56.235", "eventVersion": "1.0" },
+			];
+			Object.defineProperty(entry, "NewImage", { configurable: true, enumerable: true, get: function() { throw new Error("Impossible to get"); }, set: function() {} });
+			var target = { convertDDB: false };
+			return transform.records(source, target).then((result) => {
+				assert.strictEqual(result.success.length, 0);
+				assert.strictEqual(result.errors.length, 1);
+			});
+		});
 	});
+
 	describe('#Kinesis.no-deagg()', () => {
 		it('should support Kinesis Objects', (done) => {
 			var source = [ { "awsRegion": "us-east-1", "eventID": "1", "eventName": "aws:kinesis:record", "eventSource": "aws:kinesis", "eventSourceARN": "arn:aws:kinesis:us-east-1:0123456789ab:stream/input", "eventVersion": "1.0", "invokeIdentityArn": "arn:aws:iam::0123456789ab:role/lambda_exec_role", "kinesis": { "data": "VGhpcyBpcyB0ZXN0IGRhdGE=", "kinesisSchemaVersion": "1.0", "partitionKey": "shardId-00000000005", "sequenceNumber": "1" } } ];
@@ -182,6 +240,7 @@ describe('transformation', () => {
 				done(err);
 			});
 		});
+
 		it('should support multiple Kinesis Objects', (done) => {
 			var source = [ 
 				{ "awsRegion": "us-east-1", "eventID": "1", "eventName": "aws:kinesis:record", "eventSource": "aws:kinesis", "eventSourceARN": "arn:aws:kinesis:us-east-1:0123456789ab:stream/input", "eventVersion": "1.0", "invokeIdentityArn": "arn:aws:iam::0123456789ab:role/lambda_exec_role", "kinesis": { "data": "VGhpcyBpcyB0ZXN0IGRhdGE=", "kinesisSchemaVersion": "1.0", "partitionKey": "shardId-00000000005", "sequenceNumber": "1" } },
@@ -200,6 +259,7 @@ describe('transformation', () => {
 				done(err);
 			});
 		});
+
 		it('should ignore invalid Kinesis Objects', (done) => {
 			var source = [ 
 				{ "awsRegion": "us-east-1", "eventID": "1", "eventName": "aws:kinesis:record", "eventSource": "aws:kinesis", "eventSourceARN": "arn:aws:kinesis:us-east-1:0123456789ab:stream/input", "eventVersion": "1.0", "invokeIdentityArn": "arn:aws:iam::0123456789ab:role/lambda_exec_role", "kinesis": null }
@@ -213,7 +273,21 @@ describe('transformation', () => {
 				done(err);
 			});
 		});
+
+		it('should ignore invalid Kinesis Objects (throws error)', () => {
+			const entry = { "kinesisSchemaVersion": "1.0", "partitionKey": "shardId-00000000005", "sequenceNumber": "1" };
+			var source = [
+				{ "awsRegion": "us-east-1", "eventID": "1", "eventName": "aws:kinesis:record", "eventSource": "aws:kinesis", "eventSourceARN": "arn:aws:kinesis:us-east-1:0123456789ab:stream/input", "eventVersion": "1.0", "invokeIdentityArn": "arn:aws:iam::0123456789ab:role/lambda_exec_role", "kinesis": entry },
+			];
+			Object.defineProperty(entry, "data", { configurable: true, enumerable: true, get: function() { throw new Error("Impossible to get"); }, set: function() {} });
+			var target = { deaggregate: false };
+			return transform.records(source, target).then((result) => {
+				assert.strictEqual(result.success.length, 0);
+				assert.strictEqual(result.errors.length, 1);
+			});
+		});
 	});
+
 	describe('#Kinesis.deagg-no-kpl()', () => {
 		it('should support Kinesis Objects', (done) => {
 			var source = [
@@ -230,6 +304,7 @@ describe('transformation', () => {
 				done(err);
 			});
 		});
+
 		it('should support multiple Kinesis Objects', (done) => {
 			var source = [ 
 				{ "awsRegion": "us-east-1", "eventID": "1", "eventName": "aws:kinesis:record", "eventSource": "aws:kinesis", "eventSourceARN": "arn:aws:kinesis:us-east-1:0123456789ab:stream/input", "eventVersion": "1.0", "invokeIdentityArn": "arn:aws:iam::0123456789ab:role/lambda_exec_role", "kinesis": { "data": "VGhpcyBpcyB0ZXN0IGRhdGE=", "kinesisSchemaVersion": "1.0", "partitionKey": "shardId-00000000005", "sequenceNumber": "1" } },
@@ -248,6 +323,7 @@ describe('transformation', () => {
 				done(err);
 			});
 		});
+
 		it('should ignore invalid Kinesis Objects', (done) => {
 			var source = [ 
 				{ "awsRegion": "us-east-1", "eventID": "1", "eventName": "aws:kinesis:record", "eventSource": "aws:kinesis", "eventSourceARN": "arn:aws:kinesis:us-east-1:0123456789ab:stream/input", "eventVersion": "1.0", "invokeIdentityArn": "arn:aws:iam::0123456789ab:role/lambda_exec_role", "kinesis": null }
@@ -259,6 +335,19 @@ describe('transformation', () => {
 				done();
 			}).catch((err) => {
 				done(err);
+			});
+		});
+
+		it('should ignore invalid Kinesis Objects (throws error)', () => {
+			const entry = { "kinesisSchemaVersion": "1.0", "partitionKey": "shardId-00000000005", "sequenceNumber": "1" };
+			var source = [
+				{ "awsRegion": "us-east-1", "eventID": "1", "eventName": "aws:kinesis:record", "eventSource": "aws:kinesis", "eventSourceARN": "arn:aws:kinesis:us-east-1:0123456789ab:stream/input", "eventVersion": "1.0", "invokeIdentityArn": "arn:aws:iam::0123456789ab:role/lambda_exec_role", "kinesis": entry },
+			];
+			Object.defineProperty(entry, "data", { configurable: true, enumerable: true, get: function() { throw new Error("Impossible to get"); }, set: function() {} });
+			var target = { deaggregate: true };
+			return transform.records(source, target).then((result) => {
+				assert.strictEqual(result.success.length, 0);
+				assert.strictEqual(result.errors.length, 1);
 			});
 		});
 	});
@@ -365,6 +454,19 @@ describe('transformation', () => {
 				done(err);
 			});
 		});
+
+		it('should ignore invalid KPL Objects (throws error)', () => {
+			const entry = { "kinesisSchemaVersion": "1.0", "partitionKey": "shardId-00000000005", "sequenceNumber": "1" };
+			var source = [
+				{ "awsRegion": "us-east-1", "eventID": "1", "eventName": "aws:kinesis:record", "eventSource": "aws:kinesis", "eventSourceARN": "arn:aws:kinesis:us-east-1:0123456789ab:stream/input", "eventVersion": "1.0", "invokeIdentityArn": "arn:aws:iam::0123456789ab:role/lambda_exec_role", "kinesis": entry }
+			];
+			Object.defineProperty(entry, "data", { configurable: true, enumerable: true, get: function() { throw new Error("Impossible to get"); }, set: function() {} });
+			var target = { deaggregate: true };
+			return transform.records(source, target).then((result) => {
+				assert.strictEqual(result.success.length, 0);
+				assert.strictEqual(result.errors.length, 1);
+			});
+		});
 	});
 
 	describe('#SNS()', () => {
@@ -390,6 +492,31 @@ describe('transformation', () => {
 			var target = {};
 			return transform.records(source, target).then((result) => {
 				assert.strictEqual(result.success.length, 0);
+				assert.strictEqual(result.errors.length, 1);
+			});
+		});
+
+		it('should ignore invalid SNS records', () => {
+			var source = [
+				{ "eventSource": "aws:sns", "eventSourceARN": "arn:aws:sns:xx-test-1:123456789012:EXAMPLE", "EventVersion": "1.0", "EventSubscriptionArn": "arn:aws:sns:EXAMPLE", "EventSource": "aws:sns" }
+			];
+			var target = {};
+			return transform.records(source, target).then((result) => {
+				assert.strictEqual(result.success.length, 0);
+				assert.strictEqual(result.errors.length, 1);
+			});
+		});
+
+		it('should ignore invalid SNS records (throws error)', () => {
+			const entry = { "SignatureVersion": "1", "Timestamp": "1970-01-01T00:00:00.000Z", "Signature": "EXAMPLE", "SigningCertUrl": "EXAMPLE", "MessageId": "95df01b4-ee98-5cb9-9903-4c221d41eb5e", "MessageAttributes": { "Test": { "Type": "String", "Value": "TestString" }, "TestBinary": { "Type": "Binary", "Value": "TestBinary" } }, "Type": "Notification", "UnsubscribeUrl": "EXAMPLE", "TopicArn": "arn:aws:sns:xx-test-1:123456789012:EXAMPLE", "Subject": "TestInvoke" };
+			var source = [
+				{ "eventSource": "aws:sns", "eventSourceARN": "arn:aws:sns:xx-test-1:123456789012:EXAMPLE", "EventVersion": "1.0", "EventSubscriptionArn": "arn:aws:sns:EXAMPLE", "EventSource": "aws:sns", "Sns": entry }
+			];
+			Object.defineProperty(entry, "Message", { configurable: true, enumerable: true, get: function() { throw new Error("Impossible to get"); }, set: function() {} });
+			var target = {};
+			return transform.records(source, target).then((result) => {
+				assert.strictEqual(result.success.length, 0);
+				assert.strictEqual(result.errors.length, 1);
 			});
 		});
 	});
@@ -413,6 +540,19 @@ describe('transformation', () => {
 			var source = [
 				{ "awsRegion": "us-east-1", "eventSource": "aws:firehose", "eventSourceARN": "arn:aws:kinesis:EXAMPLE", "invocationId": "invocationIdExample"  }
 			];
+			var target = {};
+			return transform.records(source, target).then((result) => {
+				assert.strictEqual(result.success.length, 0);
+				assert.strictEqual(result.errors.length, 1);
+			});
+		});
+
+		it('should ignore invalid Firehose records (throws error)', () => {
+			const entry = { "recordId": "49546986683135544286507457936321625675700192471156785154", "approximateArrivalTimestamp": "2012-04-23T18:25:43.511Z" };
+			var source = [
+				{ "awsRegion": "us-east-1", "eventSource": "aws:firehose", "eventSourceARN": "arn:aws:kinesis:EXAMPLE", "invocationId": "invocationIdExample", "firehose": entry }
+			];
+			Object.defineProperty(entry, "data", { configurable: true, enumerable: true, get: function() { throw new Error("Impossible to get"); }, set: function() {} });
 			var target = {};
 			return transform.records(source, target).then((result) => {
 				assert.strictEqual(result.success.length, 0);

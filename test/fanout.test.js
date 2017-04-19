@@ -36,6 +36,7 @@ const fanout = require('../fanout.js');
 const sinon  = require('sinon');
 const assert = require('assert');
 const path   = require('path');
+const kinesisPoster = require('../lib/post-kinesis.js');
 
 let sendStatistics = null;
 
@@ -64,20 +65,32 @@ FakeStatistics.prototype.publish = function() {
 
 describe('fanout', () => {
 	let processConfigurationRequest = null;
-
-	const createStatistics = () => {
-		return new FakeStatistics();
-	};
+	let kinesisCreate = null;
+	let kinesisSend = null;
 
 	before(() => {
-		sinon.stub(configuration, 'get', () => {
-			return Promise.resolve(processConfigurationRequest());
+		sinon.stub(configuration, 'get', (source, serviceDefinitions) => {
+			if(processConfigurationRequest) {
+				return Promise.resolve(processConfigurationRequest(source, serviceDefinitions));
+			}
+			return Promise.resolve([]);
 		});
 		sinon.stub(statistics, 'create', () => {
-			return createStatistics();
+			return new FakeStatistics();
+		});
+		sinon.stub(kinesisPoster, 'create', (target, options) => {
+			if(kinesisCreate) {
+				return kinesisCreate(target, options);
+			}
+			return {};
+		});
+		sinon.stub(kinesisPoster, 'send', (service, target, records) => {
+			return kinesisSend(service, target, records);
 		});
 	});
 	after(() => {
+		kinesisPoster.send.restore();
+		kinesisPoster.create.restore();
 		statistics.create.restore();
 		configuration.get.restore();
 	});
@@ -96,7 +109,7 @@ describe('fanout', () => {
 				done(err);
 			} else {
 				try {
-					assert.strictEqual(stats['Invocations##'], 1);
+					assert.strictEqual(stats['Calls##'], 1);
 					assert.strictEqual(stats['InputRecords##'], 0);
 					done();
 				} catch(e) {
@@ -108,11 +121,16 @@ describe('fanout', () => {
 
 	it('should handle no targets', (done) => {
 		let stats = {};
+		let records = null;
 		sendStatistics = (s) => {
 			stats = s;
 		};
 		processConfigurationRequest = () => {
 			return [];
+		};
+		kinesisSend = (service, target, r) => {
+			records = r;
+			return Promise.resolve(true);
 		};
 		const event = { "Records": [ { "eventID": "shardId-000000000000:49545115243490985018280067714973144582180062593244200961", "eventVersion": "1.0", "kinesis": { "approximateArrivalTimestamp": 1428537600, "partitionKey": "partitionKey-3", "data": "SGVsbG8sIHRoaXMgaXMgYSB0ZXN0IDEyMy4=", "kinesisSchemaVersion": "1.0", "sequenceNumber": "49545115243490985018280067714973144582180062593244200961" }, "invokeIdentityArn": "arn:aws:iam::EXAMPLE", "eventName": "aws:kinesis:record", "eventSourceARN": "arn:aws:kinesis:EXAMPLE", "eventSource": "aws:kinesis", "awsRegion": "xx-test-1" } ] };
 		fanout.handler(event, null, (err) => {
@@ -120,16 +138,59 @@ describe('fanout', () => {
 				done(err);
 			} else {
 				try {
-					assert.strictEqual(stats['Invocations##'], 1);
+					assert.strictEqual(stats['Calls##'], 1);
 					assert.strictEqual(stats['InputRecords##'], 1);
 
-					assert.strictEqual(stats['Invocations#arn:aws:kinesis:EXAMPLE#'], 1);
+					assert.strictEqual(stats['Calls#arn:aws:kinesis:EXAMPLE#'], 1);
 					assert.strictEqual(stats['InputRecords#arn:aws:kinesis:EXAMPLE#'], 1);
 
 					assert.strictEqual(stats['Records#arn:aws:kinesis:EXAMPLE#'], 0);
 					assert.strictEqual(stats['Targets#arn:aws:kinesis:EXAMPLE#'], 0);
+
+					assert.notStrictEqual(records, undefined);
+					assert.strictEqual(records, null);
 					done();
 				} catch(e) {
+					done(e);
+				}
+			}
+		});
+	});
+
+	it('one target', (done) => {
+		let stats = {};
+		let records = null;
+		sendStatistics = (s) => {
+			stats = s;
+		};
+		processConfigurationRequest = () => {
+			return [ { id: 'target1', type: "kinesis", destination: 'kinesisStream', collapse: 'API' } ];
+		};
+		kinesisSend = (service, target, r) => {
+			records = r;
+			return Promise.resolve(true);
+		};
+		const event = { "Records": [ { "eventID": "shardId-000000000000:49545115243490985018280067714973144582180062593244200961", "eventVersion": "1.0", "kinesis": { "approximateArrivalTimestamp": 1428537600, "partitionKey": "partitionKey-3", "data": "SGVsbG8sIHRoaXMgaXMgYSB0ZXN0IDEyMy4=", "kinesisSchemaVersion": "1.0", "sequenceNumber": "49545115243490985018280067714973144582180062593244200961" }, "invokeIdentityArn": "arn:aws:iam::EXAMPLE", "eventName": "aws:kinesis:record", "eventSourceARN": "arn:aws:kinesis:EXAMPLE", "eventSource": "aws:kinesis", "awsRegion": "xx-test-1" } ] };
+		fanout.handler(event, null, (err) => {
+			if(err) {
+				done(err);
+			} else {
+				try {
+					assert.strictEqual(stats['Calls##'], 1);
+					assert.strictEqual(stats['InputRecords##'], 1);
+
+					assert.strictEqual(stats['Calls#arn:aws:kinesis:EXAMPLE#'], 1);
+					assert.strictEqual(stats['InputRecords#arn:aws:kinesis:EXAMPLE#'], 1);
+
+					assert.strictEqual(stats['Records#arn:aws:kinesis:EXAMPLE#'], 1);
+					assert.strictEqual(stats['Targets#arn:aws:kinesis:EXAMPLE#'], 1);
+
+					assert.notStrictEqual(records, undefined);
+					assert.notStrictEqual(records, null);
+					assert.strictEqual(records.length, 1);
+					done();
+				} catch(e) {
+					console.error("Error happened:",stats);
 					done(e);
 				}
 			}

@@ -30,7 +30,7 @@ const post      = require('../lib/post-elasticache-memcached.js');
 const sinon     = require('sinon');
 const memcached = require('../lib/memcached.js');
 
-describe('post-memcached-redis', () => {
+describe('post-elasticache-memcached', () => {
 	let processRequest = null;
 	before(() => {
 		sinon.stub(memcached, 'servers', () => {
@@ -76,16 +76,19 @@ describe('post-memcached-redis', () => {
 	it('target', (done) => {
 		let target = { };
 		post.targetSettings(target);
-		assert.deepEqual(target, { collapse: "multiple" });
+		assert.deepEqual(target, { collapse: "API" });
 		target = { collapse: "JSON" };
 		post.targetSettings(target);
-		assert.deepEqual(target, { collapse: "multiple" });
+		assert.deepEqual(target, { collapse: "API" });
+		target = { collapse: "none" };
+		post.targetSettings(target);
+		assert.deepEqual(target, { collapse: "API" });
 		target = { role: "roleName" };
 		post.targetSettings(target);
-		assert.deepEqual(target, { collapse: "multiple", role: null });
+		assert.deepEqual(target, { collapse: "API", role: null });
 		target = { region: "myRegion" };
 		post.targetSettings(target);
-		assert.deepEqual(target, { collapse: "multiple", region: null });
+		assert.deepEqual(target, { collapse: "API", region: null });
 		done();
 	});
 

@@ -76,16 +76,19 @@ describe('post-elasticache-redis', () => {
 	it('target', (done) => {
 		let target = { };
 		post.targetSettings(target);
-		assert.deepEqual(target, { collapse: "multiple" });
+		assert.deepEqual(target, { collapse: "API" });
 		target = { collapse: "JSON" };
 		post.targetSettings(target);
-		assert.deepEqual(target, { collapse: "multiple" });
+		assert.deepEqual(target, { collapse: "API" });
+		target = { collapse: "none" };
+		post.targetSettings(target);
+		assert.deepEqual(target, { collapse: "API" });
 		target = { role: "roleName" };
 		post.targetSettings(target);
-		assert.deepEqual(target, { collapse: "multiple", role: null });
+		assert.deepEqual(target, { collapse: "API", role: null });
 		target = { region: "myRegion" };
 		post.targetSettings(target);
-		assert.deepEqual(target, { collapse: "multiple", region: null });
+		assert.deepEqual(target, { collapse: "API", region: null });
 		done();
 	});
 

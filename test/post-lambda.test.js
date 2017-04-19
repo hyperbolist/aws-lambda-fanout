@@ -76,7 +76,10 @@ describe('post-lambda', () => {
 	it('target', (done) => {
 		let target = { };
 		post.targetSettings(target);
-		assert.deepEqual(target, { collapse: null });
+		assert.deepEqual(target, { collapse: "API" });
+		target = { collapse: "none" };
+		post.targetSettings(target);
+		assert.deepEqual(target, { collapse: "API" });
 		done();
 	});
 
