@@ -282,6 +282,7 @@ function readObjectProperties {
   CONVERT_DDB=
   DEAGGREGATE=
   APPEND_NEWLINES=
+  JSONIFY_FIELDS=
 
   while [ $# -ne 0 ]; do
     CODE=$1
@@ -334,6 +335,15 @@ function readObjectProperties {
     elif [ "$CODE" == "--append-newlines" ]; then
       if [ $# -ne 0 ]; then
         APPEND_NEWLINES=$1
+        shift
+      else
+        echo "readObjectProperties: You must specify a value for parameter $CODE" 1>&2
+        doHelp
+        exit -1
+      fi
+    elif [ "$CODE" == "--jsonify-fields" ]; then
+      if [ $# -ne 0 ]; then
+        JSONIFY_FIELDS=$1
         shift
       else
         echo "readObjectProperties: You must specify a value for parameter $CODE" 1>&2
@@ -454,6 +464,9 @@ function buildObject {
   fi
   if [ ! -z "${APPEND_NEWLINES}" ]; then
     appendJsonProperty "$1" "appendNewlines" "{\"BOOL\":${APPEND_NEWLINES}}"
+  fi
+  if [ ! -z "${JSONIFY_FIELDS}" ]; then
+    appendJsonProperty "$1" "jsonifyFields" "{\"S\":\"${JSONIFY_FIELDS}\"}"
   fi
 }
 
