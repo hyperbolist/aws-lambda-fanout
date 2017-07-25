@@ -283,6 +283,7 @@ function readObjectProperties {
   DEAGGREGATE=
   APPEND_NEWLINES=
   JSONIFY_FIELDS=
+  PROMOTE_FIELDS=
 
   while [ $# -ne 0 ]; do
     CODE=$1
@@ -344,6 +345,15 @@ function readObjectProperties {
     elif [ "$CODE" == "--jsonify-fields" ]; then
       if [ $# -ne 0 ]; then
         JSONIFY_FIELDS=$1
+        shift
+      else
+        echo "readObjectProperties: You must specify a value for parameter $CODE" 1>&2
+        doHelp
+        exit -1
+      fi
+    elif [ "$CODE" == "--promote-fields" ]; then
+      if [ $# -ne 0 ]; then
+        PROMOTE_FIELDS=$1
         shift
       else
         echo "readObjectProperties: You must specify a value for parameter $CODE" 1>&2
@@ -467,6 +477,9 @@ function buildObject {
   fi
   if [ ! -z "${JSONIFY_FIELDS}" ]; then
     appendJsonProperty "$1" "jsonifyFields" "{\"S\":\"${JSONIFY_FIELDS}\"}"
+  fi
+  if [ ! -z "${PROMOTE_FIELDS}" ]; then
+    appendJsonProperty "$1" "promoteFields" "{\"S\":\"${PROMOTE_FIELDS}\"}"
   fi
 }
 
